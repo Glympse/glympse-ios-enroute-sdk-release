@@ -12,7 +12,7 @@ let package = Package(
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
             name: "EnRouteApi",
-            targets: ["EnRouteApi", "GlympseKit", "GlympsePrivateAPI"]),
+            targets: ["EnRouteApi", "GlympseKit", "GlympsePrivateAPI"])
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
@@ -23,18 +23,18 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .binaryTarget(
             name: "EnRouteApi",
-            url: "https://github.com/Glympse/glympse-ios-enroute-sdk-release/releases/download/2.111.306/EnRouteApi.zip",
-            checksum: "f21e86529600ef0c6e894f4a307ecdb9a5b12ecf5703edfd35abc0b06f896d7b"
+            url: "https://github.com/Glympse/glympse-ios-enroute-sdk-release/releases/download/2.111.307/EnRouteApi.zip",
+            checksum: "946f16f1ee9d094c934242315e307bed9d345e43f56ac5de7cb0ee415b3a4aff"
         ),
         .binaryTarget(
             name: "GlympseKit",
-            url: "https://github.com/Glympse/glympse-ios-sdk-release/releases/download/2.111.306/GlympseKit.zip",
-            checksum: "d10cdf1b6cbf728a1c183526b925a2de5ec23628f23b763b1cd42b1182a1c1b5"
+            url: "https://github.com/Glympse/glympse-ios-sdk-release/releases/download/2.111.307/GlympseKit.zip",
+            checksum: "2d9b8536f66061a8d943d8f981ed48b1eec02230a2ef7fc547514b32e360316e"
         ),
         .binaryTarget(
             name: "GlympsePrivateAPI",
-            url: "https://github.com/Glympse/glympse-ios-sdk-release/releases/download/2.111.306/GlympsePrivateAPI.zip",
-            checksum: "1dc0afad375b50b6ad1dd4d07e79d0ed382acc78d4fc5de7eb1a4288236680ea"
+            url: "https://github.com/Glympse/glympse-ios-sdk-release/releases/download/2.111.307/GlympsePrivateAPI.zip",
+            checksum: "449fa472025e9ede2848616f2695a71388f1923d330f6ca4038a7a0d605bc6a2"
         ),
     ]
 )
