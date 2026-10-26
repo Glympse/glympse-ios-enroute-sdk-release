@@ -12,7 +12,8 @@ struct EnRouteExampleApp: App {
                 .onAppear {
                     enrouteWrapper.initAndStart()
                 }
-                .onChange(of: scenePhase) { oldPhase, newPhase in
+                // initial: true so the first foreground is reported, onChange does not fire for the starting value
+                .onChange(of: scenePhase, initial: true) { oldPhase, newPhase in
                     handleScenePhaseChange(oldPhase: oldPhase, newPhase: newPhase)
                 }
         }
@@ -20,10 +21,10 @@ struct EnRouteExampleApp: App {
     
     private func handleScenePhaseChange(oldPhase: ScenePhase, newPhase: ScenePhase) {
         if newPhase == .active {
-            enrouteWrapper.enroute?.setActive(true)
+            enrouteWrapper.setForeground(true)
             NotificationManager.shared.updateAuthorizationStatus()
         } else if (newPhase == .background) {
-            enrouteWrapper.enroute?.setActive(false)
+            enrouteWrapper.setForeground(false)
         }
     }
 }

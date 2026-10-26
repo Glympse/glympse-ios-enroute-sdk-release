@@ -1,0 +1,213 @@
+# Glympse En Route SDK for iOS: API outline (llms-full.txt)
+
+Companion to AGENTS.md. This is an outline of the public API surface of the Objective-C framework. Selectors below are the ObjC names; Swift imports them with the usual
+renaming (`startTaskWithGlyTask:` -> `startTask(with:)`, `loginWithCredentials:password:` ->
+`login(withCredentials:password:)`, `getX` stays `getX()`). Verify exact signatures in the framework headers before
+relying on an item here.
+
+Constants are class methods. Swift lowercases the text before the first underscore and keeps the rest:
+`GlyEnRouteConstants.auth_MODE_CREDENTIALS()`, `GlyEnRouteEvents.enroute_MANAGER_STARTED()`,
+`GlyEnRouteEvents.tasks_TASK_LIST_CHANGED()`, `GlyEnRouteConstants.phase_PROPERTY_LIVE()`,
+`GlyCoreConstants.primitive_TYPE_STRING()`. In ObjC they are `[GlyEnRouteConstants AUTH_MODE_CREDENTIALS]`.
+Below, names are written without the `Gly...Constants.` / `Gly...Events.` prefix.
+
+## 0. Modules
+- EnRouteApi: GlyEnRouteFactory, GlyEnRouteManager, GlyTaskManager, GlySessionManager, GlyPickupManager,
+  GlyAgentManager, GlyTask, GlyOperation, GlySession, GlyPickup, GlyAgent, GlyOrganization, GlyOrgConfig,
+  GlyEnRouteConstants, GlyEnRouteEvents, GlyListener, GlySource
+- GlympseKit: GlyCommon, GlyLong, GlyPrimitive, GlyArray<T>, GlyCoreConstants, and the core
+  types reached through the API (GlyTicket, GlyRoute, GlyTravelMode, ...)
+Import both modules in any file that uses the API.
+
+## 1. Install
+- Swift Package Manager: https://github.com/Glympse/glympse-ios-enroute-sdk-release, product `EnRouteApi`
+  (includes GlympseKit). Use the latest release (for example 2.111.309; pick the highest tag with
+  `sort -V`, not by date). Package minimum iOS 12. See AGENTS.md section 1 for a no-GUI recipe.
+
+## 2. GlyEnRouteFactory
+- +createEnRouteManager -> GlyEnRouteManager (no arguments on iOS)
+
+## 3. GlyEnRouteManager (a GlySource: addListener / removeListener)
+Configuration (call BEFORE start(); ignored with a logged warning afterwards):
+- setAuthenticationMode:(int) / getAuthenticationMode: AUTH_MODE_NONE=0, CREDENTIALS=1, TOKEN=2
+- setBaseUrl:(NSString*) / getBaseUrl: only for testing against a non-default host (for example Sandbox). Pass a bare
+  host such as s-api.enterprise.glympse.com (no scheme)
+- setSessionsGeofencesEnabled:(BOOL), setIncludeRootFields:(BOOL)
+- setVersion:version: tags your app/library in diagnostics only (label is lower-case-dashed).
+  It does not affect LOGOUT_REASON_OLD_VERSION
+Lifecycle:
+- start -> BOOL. Fails if already started, if this instance was stopped before, or if mode is NONE and login is needed
+- stop: stops the platform and releases all sub-managers, fires STOPPED, then unregisters listeners. Keeps the
+  stored login. Instance cannot be restarted
+- isStarted, isLoginNeeded (true when there is no valid token)
+- loginWithCredentials:password: -> BOOL. Needs start first and AUTH_MODE_CREDENTIALS. One login per manager
+- loginWithToken:expireTime:(long long) -> BOOL. Needs start first and AUTH_MODE_TOKEN. Rejects empty tokens and
+  expiry times less than one hour ahead. expireTime is absolute epoch milliseconds
+- logout:(int reason): LOGOUT_REASON_*; clears the stored login, fires LOGGED_OUT, then stops the platform. Only
+  USER_ACTION also calls the server logout endpoint. No-op (logged) if already logged out
+- setActive:(BOOL) / isActive: reference counted foreground/background signal; keep calls reciprocal. A new manager
+  starts at zero
+- refresh: re-fetch data. Unneeded with push, or with the org's auto-refresh (OrgConfig shouldAutoRefresh, period
+  minimum 10 s, runs only while active). No-op until started, profile loaded and logged in
+Data:
+- getOrganization, getSelfAgent, getEnRouteToken
+- getTaskManager, getSessionManager, getPickupManager, getAgentManager
+- getGlympse: the underlying core platform instance
+- getEnRouteHealthCheck: checkLoggedInState, checkSharingCompliance, getEnRouteHealthReport
+- getDiagnosticsCollector: logEvent(...), logItem(...)
+- toggleOnShift:(BOOL) -> BOOL; isOnShift
+Push:
+- registerDeviceToken:deviceToken: (type "apple_background" with a lowercase hex APNs token).
+  Glympse must hold your app's APNs credentials first. Tokens are
+  stored and registered once the platform has started after login
+- handleRemoteNotification:(NSString* payload): ignored until started and logged in
+- setForegroundNotificationMessage:, enableXoANotifications: are documented as Android only
+Diagnostics:
+- overrideLoggingLevels:debugLogLevel: using CoreConstants levels (INFO=1, NOTICE=3, WARNING=4, ERROR=5, NONE=7).
+  Verbose levels are for debug builds only
+- setRemoteLoggingEnabled:, setDiagnosticDataEnabled:
+- getSdkVersion: "major.minor.build"
+
+## 4. Events (GlyListener eventsOccurred:listener:events:param1:param2:)
+`listener` selects the table; `events` is a bitmask. Constants live in GlyEnRouteEvents. Params are GlyCommon:
+cast to GlyLong, GlyTask, GlyPrimitive, NSString, ... as noted.
+
+listener_ENROUTE_MANAGER (=1), subscribe on the manager
+- ENROUTE_MANAGER_LOGIN_COMPLETED (successful logins only; failures arrive as LOGGED_OUT, even if some SDK
+  documentation mentions an error string for this event). Credentials mode: fires at
+  login success, before the profile loads. Token mode: fires after org and agent load
+- ENROUTE_MANAGER_LOGGED_OUT (param1: GlyLong reason, a LOGOUT_REASON_*)
+- ENROUTE_MANAGER_STARTED, ENROUTE_MANAGER_STOPPED (instance unusable afterwards)
+- ENROUTE_MANAGER_SYNCED: the organization and agent profiles have synced (getOrganization / getSelfAgent are
+  populated). Tasks are NOT loaded yet: the initial task list arrives with TASKS_TASK_LIST_CHANGED
+- ENROUTE_MANAGER_SHOW_NOTIFICATION (param1: GlyPrimitive to display)
+- ENROUTE_MANAGER_AUTHENTICATION_NEEDED (after start when there is no stored login, in either mode: show login UI
+  or supply a token. In token mode after sync it also means the token expired: supply a new one)
+- ENROUTE_MANAGER_ORG_CONFIG_UPDATED, ..._SELF_AGENT_UPDATED, ..._ORG_PREDEFINED_MESSAGES_UPDATED
+- ENROUTE_MANAGER_SHIFT_STARTED, ..._SHIFT_COMPLETED, ..._SHIFT_START_FAILED (param1: error),
+  ..._SHIFT_COMPLETE_FAILED (param1: error)
+- ENROUTE_MANAGER_LOCATION_ACCURACY_UPDATED
+
+listener_TASKS (=2), subscribe on the task manager
+- TASKS_TASK_LIST_CHANGED (any add/remove/phase/refresh change; also delivers the INITIAL task list after SYNCED, so
+  re-read getTasks on every one, including the first)
+- TASKS_TASK_STARTED / TASKS_TASK_START_FAILED (param1: GlyTask)
+- TASKS_OPERATION_COMPLETED (param1: GlyOperation, param2: GlyLong reason) / TASKS_OPERATION_COMPLETION_FAILED (GlyOperation).
+  GlyOperation.getTaskId (long long) names the task. Without push the local GlyTask can still read STARTED / phase
+  "live" after this event and no TASKS_TASK_LIST_CHANGED may follow: call refresh or update the row from this event
+- TASKS_TASK_PHASE_CHANGED (param1: GlyTask, param2: new phase)
+- TASKS_OPERATION_TICKET_CHANGED (GlyOperation, GlyTicket)
+- TASKS_TASK_METADATA_UPDATE_SUCCEEDED (GlyTask) / ..._FAILED (GlyTask, error)
+- TASKS_TASK_TRAVEL_MODE_CHANGED, _DURATION_CHANGED, _DESTINATION_CHANGED, _TRANSFERRED, _ROUTE_CHANGED
+- TASKS_TASK_CHAT_MESSAGES_CHANGED (GlyTask)
+- TASKS_TASK_CREATED / TASKS_TASK_CREATE_FAILED
+
+listener_AGENTS (=3), subscribe on the agent manager
+- AGENTS_AGENT_LIST_CHANGED, _AGENT_CREATED (GlyAgent), _AGENT_CREATION_FAILED (error), _AGENT_UPDATED (GlyAgent),
+  _AGENT_UPDATE_FAILED (error)
+
+listener_SESSIONS (=4), subscribe on the session manager
+- SESSIONS_SESSION_LIST_CHANGED, _STARTED, _START_FAILED, _COMPLETED, _COMPLETION_FAILED (GlySession; failures add error)
+- SESSIONS_SESSION_ACTIVE_TASK_CHANGED, _ACTIVE_TASK_PHASE_CHANGED (GlySession, GlyTask)
+- SESSIONS_SESSION_COMPLETION_DELAYED (GlySession; minimum session duration), _ARRIVE_FAILED, _DEPART_FAILED,
+  _ACTIVE_TASK_ROUTE_UPDATED
+
+listener_PICKUPS (=8), subscribe on the pickup manager
+- PICKUPS_PICKUP_LIST_CHANGED, _ACCEPTED, _COMPLETED, _FAILED_TO_COMPLETE, _PHASE_UPDATED, _PHASE_UPDATE_FAILED,
+  _ASSIGNED, _ASSIGN_FAILED, _TICKET_AVAILABLE, _MESSAGES_CHANGED, _CHANGED, _CHAT_MESSAGES_CHANGED
+
+## 5. GlyTaskManager
+- getTasks, getPendingTasks, getActiveOperations (GlyArray), findTaskById:(long long) (Swift: findTask(byId:)),
+  findOperationByTicket:. getTasks is empty until the first TASKS_TASK_LIST_CHANGED after SYNCED
+- startTaskWithGlyTask: / startTaskWithGlyTask:withInt:(duration) -> BOOL. False unless task state is
+  TASK_STATE_CREATED, the task has no operation and the org profile is loaded. Sets TASK_STATE_STARTING until the
+  server responds. Posts current location. After TASKS_TASK_STARTED the phase is populated by the following update
+  (push, or refresh without push); until then it reads PHASE_PROPERTY_UNKNOWN ("unknown"). The duration unit is not documented (default is OrgConfig getDefaultDuration)
+- createTask:startAfterCreate: -> BOOL. False unless the self agent has the "manager" or "admin" role. Takes a
+  GlyPrimitive payload; its schema is not covered here
+- setTaskPhase:phase: -> BOOL (posts current location). Does not reject a task that was never started: it changes the
+  local phase only, the server keeps the task as not started. Start first. ARRIVED is a separate step; completeOperation can be called from LIVE
+- completeOperationWithGlyOperation: / completeOperationWithGlyOperation:withInt:(TASK_COMPLETE_REASON_*) -> BOOL
+  (posts current location)
+- addOrUpdateMetadataItem:key:value:(GlyPrimitive), updateTaskConfirmationImages:confirmationImages:
+- setTravelModeForTask:travelMode: / getTravelModeForTask: with TRAVEL_MODE_*()
+- sendMessageWithGlyTask:withNSString: (+ withLongLongInt: predefinedMessageId) -> BOOL
+- setFetchCompletedTasks:(BOOL): before start; default false. With false, a completed task disappears from getTasks
+  on the next launch; with true it stays with state TASK_STATE_COMPLETED (5)
+- saveManualSortOrder:(GlyPrimitive array of long, nil clears) / getManualSortOrder
+- setAutoStartTasksAfterAutoCompletion:(BOOL): not persisted; order tasks first
+- refresh
+
+## 6. GlySessionManager / GlyPickupManager / GlyAgentManager
+- Sessions (only started when OrgConfig isSessionModeEnabled): getSessions, anyActiveSessions, findSessionById:,
+  startSession:, arriveTaskForSession:task:, departTaskForSession:task:statusCode:, completeSession:, refresh, isStarted
+- Pickups: getPickups, getUnassignedPickups, getMyPickups, findPickupById:(NSString*), claimPickup:, unclaimPickup:,
+  completePickup:, setPickupPhase:phase:, sendMessageWithGlyPickup:withNSString: (two overloads), refresh
+- Agents: getAgents, findAgentById:, createAgent:name:password:, updateAgentName:/Password:/Avatar:/Roles:/Tags:,
+  deleteAgent:, submitAgentFeedback:, refresh. (Role requirements are enforced by the server)
+
+## 7. Models (read-only getters)
+- Types: getId is long long (Swift Int64) on GlyTask, GlyOrganization, GlyAgent, GlyOperation.getTaskId; GlyPickup
+  ids are NSString. String getters are NSString (optional in Swift)
+- GlyTask: getId, getState (TASK_STATE_*), getPhase, getDescription, getForeignId, getAgentId, getDueTime,
+  getArrivedTime, getCompletedTime (epoch ms, <=0 when unset), getOperation (nil before start), getTicket,
+  getMetadata, getTags, getConfirmationImages, getCardId, getChatRoomId
+  metadata entries are GlyPrimitive objects: getStringWith("n") = field name, getWith("v") = field value (GlyPrimitive)
+- GlyOperation: getId, getState (OPERATION_STATE_*), getStartTime, getTaskId, getTicketId, getTicket, getInviteUrl,
+  getInviteCode; setTicketEta:, setTicketVisible:, isTicketVisible, applyTicketMetadata:
+- GlySession: getId, getState (SESSION_STATE_*), getDescription, getTasks, getActiveTask, getActiveTaskIndex,
+  getStartTime, getCompletedTime, getCompletionReason (SESSION_COMPLETION_REASON_*), isCancelled
+- GlyPickup: getId (NSString*), getPhase, getDescription, getDueTime, getArrivedTime, getCompletedTime, getAgentId,
+  getCustomerName, getCustomerTicket, getOrderItems, getMessages, getManualEta, getNotes, getChatRoomId
+- GlyAgent: getId, getName, getDisplayName, getEmail, getRoles (GlyArray<NSString>: cast elements with `as String`;
+  a manager test agent reads "agent, manager"), getTags, getGlympseAvatarUrl, isOnShift,
+  getDefaultTravelMode
+- GlyOrganization: getId, getName, getAdminEmail, getOrgType (ORG_TYPE_*), getConfig, getPredefinedMessages, getTags,
+  getBaseLocation
+- GlyOrgConfig: large read-only flag/phase set. Useful: getInitialPhase, getInitialTrackingPhase, getArrivalPhase,
+  getFinalPhase, getCompletionPhases, getDefaultTravelMode, areShiftsEnabled, isPickupEnabled, isSessionModeEnabled,
+  isPhotoUploadEnabled, isSignatureUploadEnabled, getPickerDisabledTaskPhases, getSessionControlMode
+  (SESSION_CONTROL_MODE_*)
+- GlyArray<T>: count(), object(at:) or subscript in Swift (no Sequence conformance assumed; index loop)
+
+## 8. Constants (GlyEnRouteConstants)
+- AUTH_MODE_*, TASK_STATE_* (CREATED=1, STARTING=2, STARTED=3, FAILED_TO_START=4, COMPLETED=5), OPERATION_STATE_*,
+  SESSION_STATE_*, TASK_COMPLETE_REASON_*
+- LOGOUT_REASON_* emitted by the SDK: USER_ACTION=1 (logout called), OLD_VERSION=2 (SDK build older than the org
+  minimum: upgrade the SDK), INVALID_CREDENTIALS=3, INVALID_TOKEN=4, SERVER_ERROR=6 (unrecoverable server error).
+  INVALID_TOKEN: credentials mode with an expired/invalid stored token; token mode before first sync; or the agent
+  profile fails to load or belongs to a different agent
+- LOGOUT_REASON_* defined but never emitted: UNKNOWN=0, LOCATION_SERVICES_UNAVAILABLE=5, INVALID_SUBSCRIPTION=7,
+  APP_FLAVOR_MISMATCH=8
+- Phases (class methods returning NSString): PHASE_PROPERTY_UNKNOWN, PRE, ETA, NEW, LIVE, ARRIVED, FEEDBACK,
+  COMPLETING, COMPLETED, NOT_COMPLETED, CANCELLED, READY, SCHEDULED, QUASI
+- TRAVEL_MODE_DRIVING/WALKING/TRANSIT/BICYCLE, CONFIRMATION_IMAGE_NONE/SIGNATURE/PHOTO,
+  ORG_TYPE_PICKUP/PRO/ASSET_TRACKING, SESSION_CONTROL_MODE_MANUAL/SHUTTLE_SERVICE/FOOD_DELIVERY
+
+## 9. Flows with exact order
+A. Cold start: create -> setAuthenticationMode -> addListener -> start -> STARTED -> stored login?
+   no: AUTHENTICATION_NEEDED -> login UI -> login(withX) -> LOGIN_COMPLETED -> SYNCED.
+   yes: no auth event; STARTED, then SYNCED after the stored session resumes, then TASKS_TASK_LIST_CHANGED.
+B. Tasks: SYNCED (profiles ready) -> getTaskManager().add(listener) -> TASKS_TASK_LIST_CHANGED -> read tasks ->
+   startTask -> TASK_STARTED (phase populates via push or refresh; "unknown" until then) -> setTaskPhase(LIVE) -> TASK_PHASE_CHANGED -> (optional
+   setTaskPhase(ARRIVED)) -> completeOperation(task.getOperation()) -> OPERATION_COMPLETED. Without push, also call
+   refresh, or update the row from the OPERATION_COMPLETED event, because the local task can lag.
+C. Foreground/background: scenePhase .active -> setActive(true); .background -> setActive(false); one pair per
+   transition. After replacing a stopped manager, re-apply setActive(true) if the app is in the foreground.
+D. Logout and re-login: logout(USER_ACTION) -> LOGGED_OUT -> STOPPED -> new manager -> flow A.
+   stop() instead keeps the stored login (next launch resumes); the instance still cannot be reused.
+E. Token auth: mode TOKEN before start; start; on AUTHENTICATION_NEEDED call login(withToken:expireTime:) with
+   (nowMs + lifetimeMs, at least one hour ahead). At runtime an expired token fires AUTHENTICATION_NEEDED again
+   (SDK paused, failed calls retried after the new token). On LOGOUT_REASON_INVALID_TOKEN the instance is stopped:
+   fetch a token and create a new manager.
+F. Push: request notification authorization -> registerForRemoteNotifications (every launch) ->
+   didRegisterForRemoteNotificationsWithDeviceToken -> hex string -> registerDeviceToken("apple_background", hex).
+   Remote notification arrives -> userInfo["payload"] (String) -> handleRemoteNotification -> completion handler.
+
+## 10. Capabilities matrix (iOS)
+- Info.plist: NSLocationWhenInUseUsageDescription, NSLocationAlwaysAndWhenInUseUsageDescription
+- UIBackgroundModes: location, remote-notification
+- Entitlement: aps-environment (development / production)
+- Authorization: When In Use, then Always (one-time prompt), notifications via UNUserNotificationCenter
+- If location status is undetermined when the SDK starts its platform after login, the SDK prompts itself
+  (Always if NSLocationAlwaysUsageDescription is present, else When In Use if NSLocationWhenInUseUsageDescription is)

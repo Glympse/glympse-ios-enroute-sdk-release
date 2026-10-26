@@ -9,8 +9,13 @@ let enrouteWrapper = EnRouteWrapper()
 
 class EnRouteWrapper: ObservableObject {
     private(set) var enroute: GlyEnRouteManager?
-    
+    private var isForeground = false
+
     func initAndStart() {
+        // A started manager is reused. A stopped one (after logout) cannot be restarted, so it is replaced.
+        if enroute?.isStarted() == true {
+            return
+        }
         enroute = GlyEnRouteFactory.createEnRouteManager()
         #if DEBUG
         enroute?.overrideLoggingLevels(1, debugLogLevel: 1)
@@ -18,7 +23,19 @@ class EnRouteWrapper: ObservableObject {
         enroute?.setAuthenticationMode(GlyEnRouteConstants.auth_MODE_CREDENTIALS())
         enroute?.add(EventListener.shared)
         enroute?.start()
-        enroute?.setActive(true)
+        // setActive is reference counted and a new manager starts at zero, so mirror the current app state.
+        if isForeground {
+            enroute?.setActive(true)
+        }
+    }
+
+    // Call on foreground/background transitions only. Each true must be paired with one false.
+    func setForeground(_ foreground: Bool) {
+        if foreground == isForeground {
+            return
+        }
+        isForeground = foreground
+        enroute?.setActive(foreground)
     }
     
     func loginWithCredentials(username: String, password: String) {
@@ -32,9 +49,10 @@ class EnRouteWrapper: ObservableObject {
         if (enroute?.isStarted() != true) {
             initAndStart()
         }
-        let now = Int(Date().timeIntervalSince1970)
-        let expireTime = now + expiresIn
-        enroute?.login(withToken: token, expireTime: Int64(expireTime))
+        // expiresIn is seconds from now. The SDK expects an absolute epoch time in milliseconds.
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let expireTimeMs = nowMs + Int64(expiresIn) * 1000
+        enroute?.login(withToken: token, expireTime: expireTimeMs)
     }
 }
 
