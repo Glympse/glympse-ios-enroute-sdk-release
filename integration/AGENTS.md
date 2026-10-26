@@ -13,7 +13,6 @@ authorization, APNs token and payload handling), `TasksView.swift` (task actions
 Xcode: File > Add Package Dependencies, URL `https://github.com/Glympse/glympse-ios-enroute-sdk-release`, rule
 "Up to Next Major" from the latest release, add the `EnRouteApi` product to your app target. That one product also
 pulls in `GlympseKit`. The package declares iOS 12 as its minimum; check it against your deployment target.
-The release repo's README also lists a CocoaPods pod named `EnRouteApi`.
 
 Without the Xcode GUI (scripts, agents): find the latest release with
 `git ls-remote --tags https://github.com/Glympse/glympse-ios-enroute-sdk-release | grep -v '\^{}' | sed 's#.*/##' | sort -V | tail -1`
