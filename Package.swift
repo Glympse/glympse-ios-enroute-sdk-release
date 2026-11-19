@@ -23,18 +23,18 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .binaryTarget(
             name: "EnRouteApi",
-            url: "https://github.com/Glympse/glympse-ios-enroute-sdk-release/releases/download/2.111.309/EnRouteApi.zip",
-            checksum: "066b1d6eddc2f3318452ee1c0633ae1c7ee7c99c05098cb1e2152b4b50de25b0"
+            url: "https://github.com/Glympse/glympse-ios-enroute-sdk-release/releases/download/2.111.310/EnRouteApi.zip",
+            checksum: "641a4d2ffd8b22310e505c7626c35d84dfbdddb4d59d503e103d8363156f3ab6"
         ),
         .binaryTarget(
             name: "GlympseKit",
-            url: "https://github.com/Glympse/glympse-ios-sdk-release/releases/download/2.111.309/GlympseKit.zip",
-            checksum: "26c90a38e9a0d406046df4b85fd364140c1318d12bbe62ae4ce7a6a71e0d664f"
+            url: "https://github.com/Glympse/glympse-ios-sdk-release/releases/download/2.111.310/GlympseKit.zip",
+            checksum: "f750afcb362c4884a1c3a863056034ad3a31a998de1647735bce439bd1cf4024"
         ),
         .binaryTarget(
             name: "GlympsePrivateAPI",
-            url: "https://github.com/Glympse/glympse-ios-sdk-release/releases/download/2.111.309/GlympsePrivateAPI.zip",
-            checksum: "e13fb57979d550724e2d61e4d816d50fb2b0a7dbf0bd2a0afb397eed54f51685"
+            url: "https://github.com/Glympse/glympse-ios-sdk-release/releases/download/2.111.310/GlympsePrivateAPI.zip",
+            checksum: "514092eed9f9f1ff5621aac5c076f4e5b3f33c4a431fdedd27c16e0f15218895"
         ),
     ]
 )
